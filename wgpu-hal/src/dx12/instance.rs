@@ -28,8 +28,14 @@ impl crate::Instance for super::Instance {
 
         let (lib_dxgi, factory) = auxil::dxgi::factory::create_factory(desc.flags)?;
 
-        // Create IDXGIFactoryMedia
-        let factory_media = lib_dxgi.create_factory_media().ok();
+        // IDXGIFactoryMedia is made through the legacy CreateDXGIFactory1 export, and a program
+        // that hooks DXGI - ReShade does - dies with an access violation inside dxgi.dll when
+        // that export is called, before the game has drawn a frame. wgpu treats the call as
+        // optional (upstream wraps it in .ok()) and the factory is used for one thing only,
+        // CreateSwapChainForCompositionSurfaceHandle, which this fork's host never asks for:
+        // every window is presented through a swap chain made by the factory above. So it is
+        // not made at all.
+        let factory_media = None;
 
         let mut supports_allow_tearing = false;
         if let Some(factory5) = factory.as_factory5() {
