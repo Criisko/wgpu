@@ -321,9 +321,23 @@ pub(super) struct DxgiLib {
     lib: DynLib,
 }
 
+/// The library the DXGI entry points are taken from: the system's `dxgi.dll`, unless someone
+/// asked for another one before the first of them was made (see [`use_dxgi_interposer`]).
+static LIBRARY: std::sync::OnceLock<std::string::String> = std::sync::OnceLock::new();
+
+/// Take every DXGI entry point - the factory, its swap chains, and what they present - from
+/// `path`. That is what NVIDIA's Streamline interposer needs: the frames a card generates
+/// between two presented ones reach the window only when the swap chain is one the interposer
+/// made itself, and a chain from a factory it never saw is one it cannot write into. The first
+/// call wins, and it has to come before the graphics instance is created.
+pub fn use_dxgi_interposer(path: &str) {
+    let _ = LIBRARY.set(std::string::String::from(path));
+}
+
 impl DxgiLib {
     pub fn new() -> Result<Self, libloading::Error> {
-        unsafe { DynLib::new("dxgi.dll").map(|lib| Self { lib }) }
+        let name = LIBRARY.get().map(|n| n.as_str()).unwrap_or("dxgi.dll");
+        unsafe { DynLib::new(name).map(|lib| Self { lib }) }
     }
 
     /// Will error with crate::DeviceError::Unexpected if DXGI 1.3 is not available.
